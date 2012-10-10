@@ -11,7 +11,7 @@ Update by pade to provide a user friendly library, with more robustness and erro
 """
 import xmlrpclib
 import sys
-from datetime import date
+from datetime import datetime
 
 class TestLinkErrors(Exception):
     """ Basic error handler
@@ -642,7 +642,7 @@ class TestLink(TestLinkAPIClient):
 
         if testNotes == "":
             # Builds testNotes if empty
-            today = date.today()
+            today = datetime.today()
             testNotes = "%s - Test performed automatically" % today.strftime("%c")
         elif testNotes == " ":
             #No notes
