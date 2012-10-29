@@ -7,11 +7,12 @@ Created on 5 nov. 2011
 @author: kereval.com
 Initialy based on the James Stock testlink-api-python-client R7.
 
-Update by pade to provide a user friendly library, with more robustness and error management
+Update by pade to provide a user friendly library, 
+with more robustness and error management
 """
 import xmlrpclib
-import sys
 from datetime import datetime
+
 
 class TestLinkErrors(Exception):
     """ Basic error handler
@@ -24,7 +25,9 @@ class TestLinkErrors(Exception):
         return self.__msg
 
 class TestLinkAPIClient(object):        
- 
+    """
+    Low level access
+    """
 
     def __init__(self, server_url, devKey):
         self.server = xmlrpclib.Server(server_url)
@@ -39,12 +42,12 @@ class TestLinkAPIClient(object):
         """ checkDevKey :
         check if Developer Key exists   
         """
-        argsAPI = {'devKey' : self.devKey}     
-        return self.server.tl.checkDevKey(argsAPI)  
-    
+        argsAPI = {'devKey': self.devKey}     
+        return self.server.tl.checkDevKey(argsAPI)
+
     def about(self):
         """ about :
-        Gives basic information about the API    
+        Gives basic information about the API
         """
         return self.server.tl.about()
   
@@ -71,8 +74,8 @@ class TestLinkAPIClient(object):
         argsAPI = {'devKey' : self.devKey,
                 'testplanid':str(testplanid)}   
         return self.server.tl.getBuildsForTestPlan(argsAPI)
-	  	  
-    def getFirstLevelTestSuitesForTestProject(self,testprojectid):
+
+    def getFirstLevelTestSuitesForTestProject(self, testprojectid):
         """ getFirstLevelTestSuitesForTestProject :
         Get set of test suites AT TOP LEVEL of tree on a Test Project 
         """  
@@ -123,12 +126,17 @@ class TestLinkAPIClient(object):
                 'testprojectid':str(testprojectid)}  
         return self.server.tl.getProjectTestPlans(argsAPI)
 
-    def getTestCase(self, testcaseid):
+    def getTestCase(self, testcaseid=None, testcaseexternalid=None):
         """ getTestCase :
         Gets test case specification using external or internal id  
         """
-        argsAPI = {'devKey' : self.devKey,
-                'testcaseid' : str(testcaseid)}  
+
+        argsAPI = {'devKey' : self.devKey}
+        if testcaseexternalid is not None:
+            argsAPI.update({'testcaseexternalid': str(testcaseexternalid)})
+        elif testcaseid is not None:
+            argsAPI.update({'testcaseid': str(testcaseid)})
+
         return self.server.tl.getTestCase(argsAPI)          
 
     def getTestCaseAttachments(self, testcaseid):
@@ -140,13 +148,13 @@ class TestLinkAPIClient(object):
         return self.server.tl.getTestCaseAttachments(argsAPI)    
 
     def getTestCaseCustomFieldDesignValue(self, testcaseexternalid, version, 
-                                     testprojectid, customfieldname, details):
+                                     testprojectid, customfieldname, details='value'):
         """ getTestCaseCustomFieldDesignValue :
         Gets value of a Custom Field with scope='design' for a given Test case  
         """
         argsAPI = {'devKey' : self.devKey,
                 'testcaseexternalid' : str(testcaseexternalid),
-                'version' : str(version),
+                'version' : int(version),
                 'testprojectid' : str(testprojectid),
                 'customfieldname' : str(customfieldname),
                 'details' : str(details)}
@@ -188,11 +196,11 @@ class TestLinkAPIClient(object):
         testplanid = args[0]
         argsAPI = {'devKey' : self.devKey,
                 'testplanid' : str(testplanid)}
-        if len(args)>1:
+        if len(args) > 1:
             params = args[1:] 
             for param in params:
-              paramlist = param.split("=")                     
-              argsAPI[paramlist[0]] = paramlist[1]  
+                paramlist = param.split("=")                     
+                argsAPI[paramlist[0]] = paramlist[1]  
         return self.server.tl.getTestCasesForTestPlan(argsAPI)   
             
     def getTestCasesForTestSuite(self, testsuiteid, deep, details):
@@ -541,9 +549,10 @@ class TestLinkAPIClient(object):
                                         
     def getProjectIDByName(self, projectName):   
         projects=self.server.tl.getProjects({'devKey' : self.devKey})
-	for project in projects:
-	    if (project['name'] == projectName): 
+        for project in projects:
+            if (project['name'] == projectName): 
                 result = project['id']
+                break
             else:
                 result = -1
         return result
@@ -588,6 +597,64 @@ class TestLink(TestLinkAPIClient):
                     return results[0]["id"]
             raise TestLinkErrors("(getTestCaseIDByName) - Internal server error. Return value is not expected one!")
 
+    def getTestCasesForTestPlan(self, testProjectName, testPlanName):
+        """
+        Return a list of tests case object of testProjectName project, for the selected test plan
+        The return list is a list of the following dict:
+        {'tcase_id': test case id
+         'platform_id': ?
+         'tcversion_id': another internal id
+         'tc_id': same as tcase_di
+         'execution_type': ??
+         'feature_id': ??
+         'version': test case version
+         'full_external_id': the external id (as shown in the testlink interface: <name>-<unique number>
+         'external_id': just the nubmer of the full_external_id
+         'plateform_name': ??
+         'execution_order': test case priority
+         'exec_status': 'p' for pass, 'f' for failed, 'b' for blocked', 'n' for not run
+        }
+        """
+
+        # Get test plan ID
+        plan = self.getTestPlanByName(testProjectName, testPlanName)
+
+        # Get tests cases
+        results = super(TestLink, self).getTestCasesForTestPlan(plan["id"])
+
+        ret_value = []
+        for k in results.keys():
+            ret_value.append(results[k][0])
+
+        return ret_value
+
+    def getTestCaseCustomFieldDesignValue(self, customFieldName, testProjectName, testCaseObject):
+        """
+        Return custom fields value for the specified test case object
+        Test case object is an object return by 'getTestCaseByExtID' method
+        testProjectName is the name of test project (test case must be a test case of
+        the given test project name
+        Nota: test case version used is the last test case version
+        A TestLinkErrors is raised is case of problem
+        """
+
+        extid = testCaseObject['full_external_id']
+        version = testCaseObject['version']
+        projectid = self.getProjectIDByName(testProjectName)
+
+        results = super(TestLink, self).getTestCaseCustomFieldDesignValue(extid, version, projectid, customFieldName)
+
+        return results
+
+    def getProjectIDByName(self, testProjectName):
+        """ Return project id
+        or raise a TestLinkErrors if project name is not found
+        """
+        results = super(TestLink, self).getProjectIDByName(testProjectName)
+        if results == -1:
+            raise TestLinkErrors("(getProjectIDByName) - Project %s is not found" % testProjectName)
+        else:
+            return results
 
     def reportResult(self, testResult, testCaseName, testSuiteName, testNotes="", **kwargs):
         """
@@ -674,7 +741,7 @@ class TestLink(TestLinkAPIClient):
         A TestLinkErrors is raised in case of error
         """
         results = super(TestLink, self).getTestPlanByName(testProjectName, testPlanName)
-        if results[0].has_key("message"):
+        if "message" in results[0]:
             raise TestLinkErrors(results[0]["message"])
 
         return results[0]
@@ -689,14 +756,124 @@ class TestLink(TestLinkAPIClient):
 
         # Check if a builds exists
         if builds == '':
-            raise TestLinkErrors("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildsName, testPlanName))
+            raise TestLinkErrors("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildName, testPlanName))
 
         # Search the correct build name in the return builds list
         for build in builds:
             if build['name'] == buildName:
                 return build
-        
+
         # No build found with builName name
-        raise TestLinkErrors("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildsName, testPlanName))
+        raise TestLinkErrors("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildName, testPlanName))
+
+    def getTestCaseByExtID(self, testCaseExternalID):
+        """Return test case by its external ID
+        Raise an error if external ID is not found"""
+        results = self.getTestCase(testcaseexternalid=testCaseExternalID)
+
+        if 'message' in results[0]:
+            raise TestLinkErrors(results[0]['message'])
+        return results[0]
+
+class TestEngine(object):
+    """This class must be derived to implement an automatic test engine"""
+
+    def __init__(self, arg=None):
+        """ 'arg' is a tuple of test function name to execute
+        (execution order in order the same as the tuple order)
+        If arg is not set, all test are executed in alphabetical order
+        """
+        self.arg = arg
+
+    def setUp(self):
+        """Method called before all tests to pass
+        Can be implemented is the derived class
+        """
+        pass
+
+    def TearDown(self):
+        """Method called after all tests are ran
+        Can be implemented is the derived class
+        """
+        pass
+
+    def BeforeEachTest(self, fctName):
+        """Method called before each test
+        Can be implemented is the derived class
+        'fctName' is the test function that will be called
+        just after
+        """
+        pass
+
+    def AfterEachTest(self, fctName):
+        """Method called after each test
+        Can be implemented is the derived class
+        'fctName' is the test function that has been called
+        just before
+        """
+        pass
+
+    def test_1(self):
+        """docstring for test_1"""
+        pass
+
+    def test_2(self):
+        """docstring for test_2"""
+        pass
+
+    def run(self):
+        """Run test
+        If 'arg' is empty, execute all methods of this class starting with 'test_'
+        Otherwise, 'arg' must be a list of test function name to execute
+        tests method of this class must start with 'test_' and SHALL return: 
+            - the test result: string 'p', 'b' or 'f' if there no notes
+            - the tuple (string test result, string test notes)
+        """
 
 
+        if self.arg is None:
+            # No test list specified, run all tests
+            testlist = filter(filter_fct, self.__class__.__dict__)
+        else:
+            testlist = self.arg
+
+
+        self.setUp()
+
+        for fct in testlist:
+            try:
+                self.BeforeEachTest(fctName)
+                ret = self.fctName()
+
+                if type(ret) == str:
+                    if not ret in "pfb":
+                        #TODO: gerer l'erreur
+                        pass
+                    else:
+                        #TODO: save results
+                        pass
+                elif type(ret) == tuple:
+                    # First element is test result
+                    if not ret[0] in "pbf":
+                        #TODO: gerer l'erreur
+                        pass
+                    # Second element is a string for test notes
+                    elif not ret[1] == str:
+                        #TODO: gerer l'erreur
+                        pass
+                    else:
+                        #TODO Save results
+                        pass
+
+                self.AfterEachTest(fctName)
+
+            except Exception, e:
+                raise e
+
+        self.TearDown()
+
+def filter_fct(element):
+    """Search in class memeber test functions"""
+    return element.startswith("test_")
+
+            

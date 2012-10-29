@@ -62,3 +62,35 @@ class TestClass():
         execid = self.client.reportResult("f", "test2", "S1", **dico)
         assert_equal(type(execid), str)
 
+    def test_getTestCasesForTestPlan(self):
+        results = self.client.getTestCasesForTestPlan("Automatique", "FullAuto")
+        for result in results:
+            print result
+
+        assert_equal(type(results), list)
+
+        for elem in results:
+            assert_equal(type(elem), dict)
+
+    def test_getTestCaseCustomFieldDesignValue(self):
+        test_list = self.client.getTestCasesForTestPlan("Automatique", "FullAuto")
+        for test in test_list:
+            #print test
+            results = self.client.getTestCaseCustomFieldDesignValue("AutomaticTestFunction", "Automatique", test )
+            if results != '':
+                assert_equal(results, 'Fonction_auto-5')
+
+    def test_getProjectIDByName(self):
+        projectid = self.client.getProjectIDByName("Automatique")
+        assert_equal(projectid, '52')
+
+    def test_getTestCaseByExtID(self):
+        """getTestCaseByExtID test method"""
+
+        assert_raises(TestLinkErrors, self.client.getTestCaseByExtID, 'Id not known')
+
+        extid = 'auto-5'
+        results = self.client.getTestCaseByExtID(extid)
+        assert_equal(results['full_tc_external_id'], extid)
+
+
