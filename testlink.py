@@ -126,9 +126,10 @@ class TestLinkAPIClient(object):
                 'testprojectid':str(testprojectid)}  
         return self.server.tl.getProjectTestPlans(argsAPI)
 
-    def getTestCase(self, testcaseid=None, testcaseexternalid=None):
+    def getTestCase(self, testcaseid=None, testcaseexternalid=None, version=None):
         """ getTestCase :
-        Gets test case specification using external or internal id  
+        Gets test case specification using external or internal id and its verion
+        (if version is not specified, the higher version is used)
         """
 
         argsAPI = {'devKey' : self.devKey}
@@ -136,6 +137,8 @@ class TestLinkAPIClient(object):
             argsAPI.update({'testcaseexternalid': str(testcaseexternalid)})
         elif testcaseid is not None:
             argsAPI.update({'testcaseid': str(testcaseid)})
+        if  version is not None:
+            argsAPI.update({'version': str(version)})
 
         return self.server.tl.getTestCase(argsAPI)          
 
@@ -558,14 +561,44 @@ class TestLinkAPIClient(object):
         return result
 
     def __str__(self):
-        message = """
-TestLinkAPIClient - version %s
-@author: Olivier Renault (admin@sqaopen.net)
-@author: kereval.com
-@author: Patrick Dassier
-
-"""
+        message = "TestLinkAPIClient - version %s"
         return message % self.__VERSION__
+
+class TestCase(object):
+    """Test case object"""
+
+    def __init__(self):
+        self.id = ''
+        self.extid = ''
+        self.version = ''
+        self.is_open = False
+        self.is_active = False
+        self.name = ''
+        self.summary = ''
+        self.preconditions = ''
+        # Must be 'auto' or 'manual'
+        self.execution_type = ''
+        self.testsuite = TestSuite()
+
+class TestSuite(object):
+    """TestSuite object"""
+    def __init__(self):
+        self.id = ''
+        self.details = ''
+        self.name = ''
+        self.node_order = ''
+        self.node_type_id = ''
+        self.parent = None
+        self.is_root = False
+        self.project = None
+
+class TestProject(object):
+    """TestProject object"""
+    def __init__(self):
+        self.id = ''
+        self.is_active = False
+        self.is_public = False
+        self.name = ''
 
 class TestLink(TestLinkAPIClient):
     """
@@ -579,6 +612,96 @@ class TestLink(TestLinkAPIClient):
         Class initialisation
         """
         super(TestLink, self).__init__(server_url, key)
+
+    def getTestProjectByID(self, testprojectid):
+        """
+        Return a project according to its id
+        A TestLinkErrors is raised if id is not found
+        """
+        # First get all projects
+        projects = self.getProjects()
+
+        for p in projects:
+            if p['id'] == testprojectid:
+                prj = TestProject()
+                prj.id = p['id']
+                prj.is_active = p['active'] == '1'
+                prj.is_public = p['is_public'] == '1'
+                prj.name = p['name']
+                return prj
+        # No project found, raise an error
+        raise TestLinkErrors("(getProjectByID) - Project with id %s is not found" % testprojectid)
+
+
+    def getTestSuiteByID(self, testsuiteid):
+        """docstring for getTestSuiteByID"""
+        result = super(TestLink, self).getTestSuiteByID(testsuiteid)
+
+        # Check error
+        if type(result) == list and 'message' in result[0]:
+            raise TestLinkErrors(result[0]['message'])
+
+        ts = TestSuite()
+        ts.id = result['id']
+        ts.details = result['details']
+        ts.name = result['name']
+        ts.node_order = result['node_order']
+        ts.node_type_id = result['node_type_id']
+
+        # Is parent_id an id of a test suite ?
+        try:
+            ts_parent = self.getTestSuiteByID(result['parent_id'])
+        except TestLinkErrors:
+            # Parent is not a test suite, so it is a project
+            ts.project = self.getTestProjectByID(result['parent_id'])
+            ts.parent = None
+            ts.is_root = True
+        else:
+            # Parent is a test suite
+            # register it
+            ts.parent = ts_parent
+            ts.is_root = False
+
+            # Also register the project
+            # find it in parent object
+            ts.project = ts.parent.project
+
+        return ts
+
+    def getTestCase(self, testcaseid=None, testcaseexternalid=None, version=None):
+        """
+        Return the TestCase object according to parameters
+        """
+        # Check parameters
+        if testcaseid is None and testcaseexternalid is None:
+            raise TestLinkErrors("(getTestCase) - You must specified 'testcaseid' or 'testcaseexternalid'")
+
+        result = super(TestLink, self).getTestCase(testcaseid, testcaseexternalid, version)
+
+        # Check error
+        if 'message' in result[0]:
+            raise TestLinkErrors(result[0]['message'])
+
+
+        # Create TestCase object
+        tc = TestCase()
+        tc.id = result[0]['testcase_id']
+        tc.extid = result[0]['full_tc_external_id']
+        tc.version = result[0]['version']
+        tc.is_active = result[0]['active'] == '1'
+        tc.is_open = result[0]['is_open'] == '1'
+        tc.name = result[0]['name']
+        tc.summary = result[0]['summary']
+        tc.preconditions = result[0]['preconditions']
+        if result[0]['execution_type'] == '2':
+            #Automatic test
+            tc.execution_type = 'auto'
+        else:
+            # Manual testProjectName
+            tc.execution_type = 'manual'
+        tc.testsuite = self.getTestSuiteByID(result[0]['testsuite_id'])
+
+        return tc
 
     def getTestCaseIDByName(self, testCaseName, testSuiteName, testProjectName):
         """
@@ -600,20 +723,6 @@ class TestLink(TestLinkAPIClient):
     def getTestCasesForTestPlan(self, testProjectName, testPlanName):
         """
         Return a list of tests case object of testProjectName project, for the selected test plan
-        The return list is a list of the following dict:
-        {'tcase_id': test case id
-         'platform_id': ?
-         'tcversion_id': another internal id
-         'tc_id': same as tcase_di
-         'execution_type': ??
-         'feature_id': ??
-         'version': test case version
-         'full_external_id': the external id (as shown in the testlink interface: <name>-<unique number>
-         'external_id': just the nubmer of the full_external_id
-         'plateform_name': ??
-         'execution_order': test case priority
-         'exec_status': 'p' for pass, 'f' for failed, 'b' for blocked', 'n' for not run
-        }
         """
 
         # Get test plan ID
@@ -624,37 +733,36 @@ class TestLink(TestLinkAPIClient):
 
         ret_value = []
         for k in results.keys():
-            ret_value.append(results[k][0])
+            # Get test case object associated of return test case id
+            # and append it to test case list
+            ret_value.append(self.getTestCase(testcaseid=k))
 
         return ret_value
 
-    def getTestCaseCustomFieldDesignValue(self, customFieldName, testProjectName, testCaseObject):
+    def getTestCaseCustomFieldDesignValue(self, customFieldName, testCaseObject):
         """
         Return custom fields value for the specified test case object
-        Test case object is an object return by 'getTestCaseByExtID' method
-        testProjectName is the name of test project (test case must be a test case of
-        the given test project name
-        Nota: test case version used is the last test case version
+        Test case object is an object return by 'getTestCase' method
         A TestLinkErrors is raised is case of problem
         """
 
-        extid = testCaseObject['full_external_id']
-        version = testCaseObject['version']
-        projectid = self.getProjectIDByName(testProjectName)
+        extid = testCaseObject.extid
+        version = testCaseObject.version
+        projectid = testCaseObject.testsuite.project.id 
 
         results = super(TestLink, self).getTestCaseCustomFieldDesignValue(extid, version, projectid, customFieldName)
 
         return results
 
-    def getProjectIDByName(self, testProjectName):
-        """ Return project id
+    def getTestProjectByName(self, testProjectName):
+        """ Return project object correcponding to the testProjectName name
         or raise a TestLinkErrors if project name is not found
         """
-        results = super(TestLink, self).getProjectIDByName(testProjectName)
-        if results == -1:
-            raise TestLinkErrors("(getProjectIDByName) - Project %s is not found" % testProjectName)
+        prj_id = self.getProjectIDByName(testProjectName)
+        if prj_id == -1:
+            raise TestLinkErrors("(getProjectByName) - Project %s is not found" % testProjectName)
         else:
-            return results
+            return self.getTestProjectByID(prj_id)
 
     def reportResult(self, testResult, testCaseName, testSuiteName, testNotes="", **kwargs):
         """
@@ -768,12 +876,8 @@ class TestLink(TestLinkAPIClient):
 
     def getTestCaseByExtID(self, testCaseExternalID):
         """Return test case by its external ID
-        Raise an error if external ID is not found"""
-        results = self.getTestCase(testcaseexternalid=testCaseExternalID)
-
-        if 'message' in results[0]:
-            raise TestLinkErrors(results[0]['message'])
-        return results[0]
+        Error are managed by getTestCase method"""
+        return self.getTestCase(testcaseexternalid=testCaseExternalID)
 
 class TestEngine(object):
     """This class must be derived to implement an automatic test engine"""
