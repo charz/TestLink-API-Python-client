@@ -1,7 +1,14 @@
-# -*- coding: utf-8 -*-
+#! /usr/bin/python
+# -*- coding: UTF-8 -*-
+
+#  Copyright 2012 pade (Patrick Dassier), TestLink-API-Python-client developers
+#
+#  Licensed under ???
+#  see https://github.com/orenault/TestLink-API-Python-client/issues/4
 
 from testlinkapi import TestlinkAPIClient, TestLinkHelper
 from testlinkerrors import TestLinkError
+from datetime import datetime
 
 class TestCase(object):
     """Test case object"""
@@ -39,12 +46,11 @@ class TestProject(object):
         self.is_public = False
         self.name = ''
 
-class TestLink(TestLinkAPIClient):
+class TestLink(TestlinkAPIClient):
     """
-    TestLink API library
+    TestLink API library 
+    provide a user friendly library, with more robustness and error management
     """
-
-    __VERSION__ = "0.1"
 
     def __init__(self, server_url, key):
         """
@@ -55,7 +61,7 @@ class TestLink(TestLinkAPIClient):
     def getTestProjectByID(self, testprojectid):
         """
         Return a project according to its id
-        A TestLinkErrors is raised if id is not found
+        A TestLinkError is raised if id is not found
         """
         # First get all projects
         projects = self.getProjects()
@@ -69,7 +75,7 @@ class TestLink(TestLinkAPIClient):
                 prj.name = p['name']
                 return prj
         # No project found, raise an error
-        raise TestLinkErrors("(getProjectByID) - Project with id %s is not found" % testprojectid)
+        raise TestLinkError("(getProjectByID) - Project with id %s is not found" % testprojectid)
 
 
     def getTestSuiteByID(self, testsuiteid):
@@ -78,7 +84,7 @@ class TestLink(TestLinkAPIClient):
 
         # Check error
         if type(result) == list and 'message' in result[0]:
-            raise TestLinkErrors(result[0]['message'])
+            raise TestLinkError(result[0]['message'])
 
         ts = TestSuite()
         ts.id = result['id']
@@ -90,7 +96,7 @@ class TestLink(TestLinkAPIClient):
         # Is parent_id an id of a test suite ?
         try:
             ts_parent = self.getTestSuiteByID(result['parent_id'])
-        except TestLinkErrors:
+        except TestLinkError:
             # Parent is not a test suite, so it is a project
             ts.project = self.getTestProjectByID(result['parent_id'])
             ts.parent = None
@@ -113,13 +119,13 @@ class TestLink(TestLinkAPIClient):
         """
         # Check parameters
         if testcaseid is None and testcaseexternalid is None:
-            raise TestLinkErrors("(getTestCase) - You must specified 'testcaseid' or 'testcaseexternalid'")
+            raise TestLinkError("(getTestCase) - You must specified 'testcaseid' or 'testcaseexternalid'")
 
         result = super(TestLink, self).getTestCase(testcaseid, testcaseexternalid, version)
 
         # Check error
         if 'message' in result[0]:
-            raise TestLinkErrors(result[0]['message'])
+            raise TestLinkError(result[0]['message'])
 
 
         # Create TestCase object
@@ -147,17 +153,17 @@ class TestLink(TestLinkAPIClient):
         Find a test case by its name, by its suite and its project
         Suite name must not be duplicate, so only one test case must be found 
         Return test case id if success 
-        or raise TestLinkErrors exception with error message in case of error
+        or raise TestLinkError exception with error message in case of error
         """    
         results = super(TestLink, self).getTestCaseIDByName(testCaseName, testSuiteName, testProjectName)
         if results[0].has_key("message"):
-            raise TestLinkErrors(results[0]["message"])
+            raise TestLinkError(results[0]["message"])
         elif len(results) > 1:
-            raise TestLinkErrors("(getTestCaseIDByName) - Several case test found. Suite name must not be duplicate for the same project")
+            raise TestLinkError("(getTestCaseIDByName) - Several case test found. Suite name must not be duplicate for the same project")
         else:
             if results[0]["name"] == testCaseName:
                     return results[0]["id"]
-            raise TestLinkErrors("(getTestCaseIDByName) - Internal server error. Return value is not expected one!")
+            raise TestLinkError("(getTestCaseIDByName) - Internal server error. Return value is not expected one!")
 
     def getTestCasesForTestPlan(self, testProjectName, testPlanName):
         """
@@ -182,7 +188,7 @@ class TestLink(TestLinkAPIClient):
         """
         Return custom fields value for the specified test case object
         Test case object is an object return by 'getTestCase' method
-        A TestLinkErrors is raised is case of problem
+        A TestLinkError is raised is case of problem
         """
 
         extid = testCaseObject.extid
@@ -195,11 +201,11 @@ class TestLink(TestLinkAPIClient):
 
     def getTestProjectByName(self, testProjectName):
         """ Return project object correcponding to the testProjectName name
-        or raise a TestLinkErrors if project name is not found
+        or raise a TestLinkError if project name is not found
         """
         prj_id = self.getProjectIDByName(testProjectName)
         if prj_id == -1:
-            raise TestLinkErrors("(getProjectByName) - Project %s is not found" % testProjectName)
+            raise TestLinkError("(getProjectByName) - Project %s is not found" % testProjectName)
         else:
             return self.getTestProjectByID(prj_id)
 
@@ -215,28 +221,28 @@ class TestLink(TestLinkAPIClient):
             - testProjectName: the project to fill
             - testPlanName: the active test plan
             - buildName: the active build.
-        Raise a TestLinkErrors error with the error message in case of trouble
+        Raise a TestLinkError error with the error message in case of trouble
         Return the execution id needs to attach files to test execution
         """
         
         # Check parameters
         for data in ["testProjectName", "testPlanName", "buildName"]:
             if not kwargs.has_key(data):
-                raise TestLinkErrors("(reportResult) - Missing key %s in anonymous dictionnary" % data)
+                raise TestLinkError("(reportResult) - Missing key %s in anonymous dictionnary" % data)
 
         # Get project id
         project = self.getTestProjectByName(kwargs["testProjectName"])
 
         # Check if project is active
         if project['active'] != '1':
-            raise TestLinkErrors("(reportResult) - Test project %s is not active" % kwargs["testProjectName"])
+            raise TestLinkError("(reportResult) - Test project %s is not active" % kwargs["testProjectName"])
 
         # Check test plan name
         plan = self.getTestPlanByName(kwargs["testProjectName"], kwargs["testPlanName"])
 
         # Check is test plan is open and active
         if plan['is_open'] != '1' or plan['active'] != '1':
-            raise TestLinkErrors("(reportResult) - Test plan %s is not active or not open" % kwargs["testPlanName"])
+            raise TestLinkError("(reportResult) - Test plan %s is not active or not open" % kwargs["testPlanName"])
         # Memorise test plan id
         planId = plan['id']
 
@@ -245,14 +251,14 @@ class TestLink(TestLinkAPIClient):
 
         # Check if build is open and active
         if build['is_open'] != '1' or build['active'] != '1':
-            raise TestLinkErrors("(reportResult) - Build %s in not active or not open" % kwargs["buildName"])
+            raise TestLinkError("(reportResult) - Build %s in not active or not open" % kwargs["buildName"])
 
         # Get test case id
         caseId = self.getTestCaseIDByName(testCaseName, testSuiteName, kwargs["testProjectName"])
 
         # Check results parameters
         if testResult not in "pbf":
-            raise TestLinkErrors("(reportResult) - Test result must be 'p', 'f' or 'b'")
+            raise TestLinkError("(reportResult) - Test result must be 'p', 'f' or 'b'")
 
         if testNotes == "":
             # Builds testNotes if empty
@@ -267,43 +273,43 @@ class TestLink(TestLinkAPIClient):
         results = self.reportTCResult(caseId, planId, kwargs["buildName"], testResult, testNotes)
         # Check errors
         if results[0]["message"] != "Success!":
-            raise TestLinkErrors(results[0]["message"])
+            raise TestLinkError(results[0]["message"])
     
         return results[0]['id']
 
-    def getTestProjectByName(self, testProjectName):
-        """
-        Return project
-        A TestLinkErrors is raised in case of error
-        """
-        results = super(TestLink, self).getTestProjectByName(testProjectName)
-        if results[0].has_key("message"):
-             raise TestLinkErrors(results[0]["message"])
+#    def getTestProjectByName(self, testProjectName):
+        #"""
+        #Return project
+        #A TestLinkError is raised in case of error
+        #"""
+        #results = super(TestLink, self).getTestProjectByName(testProjectName)
+        #if results[0].has_key("message"):
+            #raise TestLinkError(results[0]["message"])
 
-        return results[0]
+        #return results[0]
 
     def getTestPlanByName(self, testProjectName, testPlanName):
         """
         Return test plan
-        A TestLinkErrors is raised in case of error
+        A TestLinkError is raised in case of error
         """
         results = super(TestLink, self).getTestPlanByName(testProjectName, testPlanName)
         if "message" in results[0]:
-            raise TestLinkErrors(results[0]["message"])
+            raise TestLinkError(results[0]["message"])
 
         return results[0]
 
     def getBuildByName(self, testProjectName, testPlanName, buildName):
         """
         Return build corresponding to buildName
-        A TestLinkErrors is raised in case of error
+        A TestLinkError is raised in case of error
         """
         plan = self.getTestPlanByName(testProjectName, testPlanName)
         builds = self.getBuildsForTestPlan(plan['id'])
 
         # Check if a builds exists
         if builds == '':
-            raise TestLinkErrors("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildName, testPlanName))
+            raise TestLinkError("(getBuildByName) - Builds %s does not exists for test plan %s" % (buildName, testPlanName))
 
         # Search the correct build name in the return builds list
         for build in builds:
@@ -311,112 +317,18 @@ class TestLink(TestLinkAPIClient):
                 return build
 
         # No build found with builName name
-        raise TestLinkErrors("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildName, testPlanName))
+        raise TestLinkError("(getBuildsByName) - Builds %s does not exists for test plan %s" % (buildName, testPlanName))
 
     def getTestCaseByExtID(self, testCaseExternalID):
         """Return test case by its external ID
         Error are managed by getTestCase method"""
         return self.getTestCase(testcaseexternalid=testCaseExternalID)
 
-class TestEngine(object):
-    """This class must be derived to implement an automatic test engine"""
-
-    def __init__(self, arg=None):
-        """ 'arg' is a tuple of test function name to execute
-        (execution order in order the same as the tuple order)
-        If arg is not set, all test are executed in alphabetical order
-        """
-        self.arg = arg
-
-    def setUp(self):
-        """Method called before all tests to pass
-        Can be implemented is the derived class
-        """
-        pass
-
-    def TearDown(self):
-        """Method called after all tests are ran
-        Can be implemented is the derived class
-        """
-        pass
-
-    def BeforeEachTest(self, fctName):
-        """Method called before each test
-        Can be implemented is the derived class
-        'fctName' is the test function that will be called
-        just after
-        """
-        pass
-
-    def AfterEachTest(self, fctName):
-        """Method called after each test
-        Can be implemented is the derived class
-        'fctName' is the test function that has been called
-        just before
-        """
-        pass
-
-    def test_1(self):
-        """docstring for test_1"""
-        pass
-
-    def test_2(self):
-        """docstring for test_2"""
-        pass
-
-    def run(self):
-        """Run test
-        If 'arg' is empty, execute all methods of this class starting with 'test_'
-        Otherwise, 'arg' must be a list of test function name to execute
-        tests method of this class must start with 'test_' and SHALL return: 
-            - the test result: string 'p', 'b' or 'f' if there no notes
-            - the tuple (string test result, string test notes)
-        """
 
 
-        if self.arg is None:
-            # No test list specified, run all tests
-            testlist = filter(filter_fct, self.__class__.__dict__)
-        else:
-            testlist = self.arg
-
-
-        self.setUp()
-
-        for fct in testlist:
-            try:
-                self.BeforeEachTest(fctName)
-                ret = self.fctName()
-
-                if type(ret) == str:
-                    if not ret in "pfb":
-                        #TODO: gerer l'erreur
-                        pass
-                    else:
-                        #TODO: save results
-                        pass
-                elif type(ret) == tuple:
-                    # First element is test result
-                    if not ret[0] in "pbf":
-                        #TODO: gerer l'erreur
-                        pass
-                    # Second element is a string for test notes
-                    elif not ret[1] == str:
-                        #TODO: gerer l'erreur
-                        pass
-                    else:
-                        #TODO Save results
-                        pass
-
-                self.AfterEachTest(fctName)
-
-            except Exception, e:
-                raise e
-
-        self.TearDown()
-
-def filter_fct(element):
-    """Search in class memeber test functions"""
-    return element.startswith("test_")
-
-            
+if __name__ == "__main__":
+    tl_helper = TestLinkHelper()
+    tl_helper.setParamsFromArgs()
+    myTestLink = tl_helper.connect(TestLink)
+    print myTestLink
+    print myTestLink.about()
