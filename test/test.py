@@ -11,6 +11,9 @@
 '''
 Fichier de test pour le module "TestLinkAPI.py"
 '''
+import sys
+sys.path.append("../src")
+
 
 import re
 from testlink import TestLink, TestLinkError, TestLinkHelper
