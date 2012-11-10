@@ -25,6 +25,7 @@ class TestCase(object):
         # Must be 'auto' or 'manual'
         self.execution_type = ''
         self.testsuite = TestSuite()
+        self.project = TestProject()
 
 class TestSuite(object):
     """TestSuite object"""
@@ -145,6 +146,7 @@ class TestLink(TestlinkAPIClient):
             # Manual testProjectName
             tc.execution_type = 'manual'
         tc.testsuite = self.getTestSuiteByID(result[0]['testsuite_id'])
+        tc.project = tc.testsuite.project
 
         return tc
 
@@ -209,16 +211,14 @@ class TestLink(TestlinkAPIClient):
         else:
             return self.getTestProjectByID(prj_id)
 
-    def reportResult(self, testResult, testCaseName, testSuiteName, testNotes="", **kwargs):
+    def reportResult(self, testResult, testCase, testNotes="", **kwargs):
         """
         Report results for test case
         Arguments are:
         - testResult: "p" for passed, "b" for blocked, "f" for failed
-        - testCaseName: the test case name to report
-        - testSuiteName: the test suite name that support the test case
+        - testCase: the concern test case object
         - testNotes: optional, if empty will be replace by a default string. To let it blank, just set testNotes to " " characters
         - an anonymous dictionnary with followings keys:
-            - testProjectName: the project to fill
             - testPlanName: the active test plan
             - buildName: the active build.
         Raise a TestLinkError error with the error message in case of trouble
@@ -226,19 +226,19 @@ class TestLink(TestlinkAPIClient):
         """
         
         # Check parameters
-        for data in ["testProjectName", "testPlanName", "buildName"]:
-            if not kwargs.has_key(data):
+        for data in ["testPlanName", "buildName"]:
+            if data not in kwargs:
                 raise TestLinkError("(reportResult) - Missing key %s in anonymous dictionnary" % data)
 
-        # Get project id
-        project = self.getTestProjectByName(kwargs["testProjectName"])
+        # Get project object
+        project = testCase.project
 
         # Check if project is active
-        if project['active'] != '1':
-            raise TestLinkError("(reportResult) - Test project %s is not active" % kwargs["testProjectName"])
+        if not project.is_active:
+            raise TestLinkError("(reportResult) - Test project %s is not active" % project.name)
 
         # Check test plan name
-        plan = self.getTestPlanByName(kwargs["testProjectName"], kwargs["testPlanName"])
+        plan = self.getTestPlanByName(project.name, kwargs["testPlanName"])
 
         # Check is test plan is open and active
         if plan['is_open'] != '1' or plan['active'] != '1':
@@ -247,14 +247,11 @@ class TestLink(TestlinkAPIClient):
         planId = plan['id']
 
         # Check build name
-        build = self.getBuildByName(kwargs["testProjectName"], kwargs["testPlanName"], kwargs["buildName"])
+        build = self.getBuildByName(project.name, kwargs["testPlanName"], kwargs["buildName"])
 
         # Check if build is open and active
         if build['is_open'] != '1' or build['active'] != '1':
             raise TestLinkError("(reportResult) - Build %s in not active or not open" % kwargs["buildName"])
-
-        # Get test case id
-        caseId = self.getTestCaseIDByName(testCaseName, testSuiteName, kwargs["testProjectName"])
 
         # Check results parameters
         if testResult not in "pbf":
@@ -268,13 +265,12 @@ class TestLink(TestlinkAPIClient):
             #No notes
             testNotes = ""
 
-        print "testNotes: %s" % testNotes
         # Now report results
-        results = self.reportTCResult(caseId, planId, kwargs["buildName"], testResult, testNotes)
+        results = self.reportTCResult(testCase.id, planId, kwargs["buildName"], testResult, testNotes)
         # Check errors
         if results[0]["message"] != "Success!":
             raise TestLinkError(results[0]["message"])
-    
+
         return results[0]['id']
 
 #    def getTestProjectByName(self, testProjectName):

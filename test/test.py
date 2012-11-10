@@ -57,8 +57,7 @@ class TestClass():
         pass
 
     def test_reportResult(self):
-        dico = {'testProjectName': 'Automatique',
-                'testPlanName': 'FullAuto',
+        dico = {'testPlanName': 'FullAuto',
                 'buildName': 'V0.1'}
         execid = self.client.reportResult("p", "test1", "S1", "An example of note", **dico)
         assert_equal(type(execid), str)
