@@ -1,7 +1,7 @@
 #! /usr/bin/python
 # -*- coding: UTF-8 -*-
 
-#  Copyright 2012 pade (Paul Dassier), TestLink-API-Python-client developers
+#  Copyright 2012 pade (Patrick Dassier), TestLink-API-Python-client developers
 #
 #  Licensed under ???
 #  see https://github.com/orenault/TestLink-API-Python-client/issues/4
