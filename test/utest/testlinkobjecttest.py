@@ -85,7 +85,7 @@ class TestLinkObjectTestCase(unittest.TestCase):
 
         a_tlobj = TLObject(self.api)
         self.assertEqual(self.api, a_tlobj._api)
-        self.assertDictEqual({}, a_tlobj._attributes)
+        self.assertDictEqual({'id' : None}, a_tlobj._attributes)
         
     def test_init_with_args(self):
         """ init TestLinkObject with args """

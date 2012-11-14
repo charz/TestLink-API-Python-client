@@ -18,6 +18,8 @@ class TestLinkObject(object):
     APIGETMETHOD = 'getMethodMustDefinedOnSubclass'
     # Name API fieldname for id
     APIIDFNAME = 'testobjidMustDefinedOnSubclass'
+    # Default attributes, the class should know
+    DEFAULTATTRIBUTES = {'id' : None}
 
     def __init__(self, api, **attributes):
         """ New instance of a TestLink object
@@ -26,7 +28,7 @@ class TestLinkObject(object):
         ARGS are key value pairs defining for self attributes
         """
 
-        self._attributes = {}
+        self._attributes = self.DEFAULTATTRIBUTES.copy()
         self._api  = api
         self._storeAttributes(attributes)
         
@@ -48,8 +50,7 @@ class TestLinkObject(object):
         KEYS is a dictionary with key value pairs
         """
         # FIXME LC 10.11.12: API needs public method .callServerWithCheck()
-        # FIXME LC 11.11.12: .callServerWithCheck() should add Args like devKey
-        # FIXME LC 11.11.12: .callServerWithCheck() should check Data Error
+        # FIXME LC 14.11.12: see enhancement #4
         api_keys = {'devKey' : self._api.devKey}
         api_keys.update(keys)
         return self._api._callServer(self.APIGETMETHOD, keys)[0]
