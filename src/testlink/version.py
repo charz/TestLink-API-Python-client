@@ -6,4 +6,4 @@
 #  Licensed under ???
 #  see https://github.com/orenault/TestLink-API-Python-client/issues/4
 
-VERSION = '0.4.0-Beta'
+VERSION = '0.5.0-testlinkobjects'
